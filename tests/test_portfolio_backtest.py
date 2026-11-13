@@ -11,7 +11,7 @@ def history():
         for minute in range(1, 391):
             close = 10.5 if minute >= 16 else 10
             high = 10.6 if minute >= 16 else 10.2
-            low = 10 if minute >= 16 else 9.8
+            low = 10.3 if minute >= 17 else (10 if minute == 16 else 9.8)
             bars.append(Bar(symbol, start + timedelta(minutes=minute),
                             close, high, low, close, 1000))
     return bars
