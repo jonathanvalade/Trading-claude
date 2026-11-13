@@ -7,6 +7,7 @@ Autonomous **paper-only** US equities trading research prototype. Polls a market
 ## Quick start (offline demo)
 
 ```bash
+python -m pip install -r requirements.txt
 python -m trading_claude.demo
 python -m unittest discover -s tests -v
 ```
@@ -16,3 +17,9 @@ The demo uses deterministic synthetic candles. No external data subscription is 
 ## Upstream inspiration
 
 Inspired by [Jakeschincariol/day-trader-skill](https://github.com/Jakeschincariol/day-trader-skill) (MIT). The upstream 11 Claude skills are **not yet copied or integrated**; see `docs/ROADMAP.md`. This project implements a separate testable core first.
+
+## Historical research
+
+See [Backtesting](docs/BACKTESTING.md) for next-bar-open execution, commission/slippage assumptions, daily equity and drawdown statistics, and a rules-only versus pre-recorded AI-approval comparison. Backtests are offline and do not call Claude or a broker. These results are not proof of profitability.
+
+[GitHub Actions tests](../../actions/workflows/tests.yml) run on pushes; check the latest run before trusting changes.
