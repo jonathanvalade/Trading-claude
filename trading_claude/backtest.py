@@ -68,6 +68,7 @@ def run_backtest(bars, config=None, costs=None, approvals=None):
     history = []
     equity_curve = []
     trades = []
+    entry_fees = {}
     active_day = None
     for index, bar in enumerate(ordered):
         dt = bar.timestamp.astimezone(NY)
@@ -76,6 +77,7 @@ def run_backtest(bars, config=None, costs=None, approvals=None):
             if p.positions:
                 raise ValueError("Previous session not flattened: missing closing data")
             active_day = day
+            pending = None
             p.begin_session(day)
             history = []
         # Fill only at NEXT completed bar's opening price, never the signal close.
@@ -92,6 +94,7 @@ def run_backtest(bars, config=None, costs=None, approvals=None):
                     pos = p.positions[bar.symbol]
                     fee = costs.fee(pos.quantity)
                     p.cash -= fee
+                    entry_fees[bar.symbol] = fee
                     p.events.append({"type": "COMMISSION", "amount": fee})
         # Existing positions: conservative stop-first if both levels touched.
         if bar.symbol in p.positions:
@@ -111,7 +114,7 @@ def run_backtest(bars, config=None, costs=None, approvals=None):
                 fee = costs.fee(pos.quantity)
                 pnl = p.exit(bar.symbol, exit_price, reason) - fee
                 p.cash -= fee
-                trades.append(pnl)
+                trades.append(pnl - entry_fees.pop(bar.symbol, 0))
         p.last_prices[bar.symbol] = bar.close
         p.check_drawdown()
         history.append(bar)
@@ -122,7 +125,11 @@ def run_backtest(bars, config=None, costs=None, approvals=None):
                 pending = signal
         # End-of-day marks are after the close. No artificial flat if bars end early.
         if dt.time() >= time(15, 55):
-            equity_curve.append((day, p.equity(p.last_prices)))
+            daily_equity = (day, p.equity(p.last_prices))
+            if equity_curve and equity_curve[-1][0] == day:
+                equity_curve[-1] = daily_equity
+            else:
+                equity_curve.append(daily_equity)
     if p.positions:
         raise ValueError("History ends with open position: missing EOD candles")
     if not equity_curve and ordered:
