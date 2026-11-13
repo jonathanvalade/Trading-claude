@@ -53,12 +53,29 @@ class Portfolio:
     events: list = field(default_factory=list)
     seen_signals: set = field(default_factory=set)
     halted: bool = False
+    session_date: str = ''
+    session_start_equity: float = 0.0
+    last_prices: dict = field(default_factory=dict)
+    processed_bars: dict = field(default_factory=dict)
 
     def __post_init__(self):
         self.cash = self.config.initial_capital_usd
+        self.session_start_equity = self.config.initial_capital_usd
 
     def equity(self, prices: dict) -> float:
         return self.cash + sum(p.quantity * prices.get(s, p.entry) for s, p in self.positions.items())
+
+    def begin_session(self, day):
+        if self.session_date != day:
+            self.session_date = day
+            self.realized_pnl_today = 0
+            self.halted = False
+            self.session_start_equity = self.equity(self.last_prices)
+
+    def check_drawdown(self):
+        if self.equity(self.last_prices) <= self.session_start_equity * (1 - self.config.max_daily_loss_pct / 100):
+            self.halted = True
+        return self.halted
 
     def open_risk(self) -> float:
         return sum(p.quantity * max(0, p.entry - p.stop) for p in self.positions.values())
@@ -66,7 +83,8 @@ class Portfolio:
     def enter(self, symbol: str, price: float, stop: float, target: float, signal_id: str, prices: dict):
         if signal_id in self.seen_signals:
             return "BLOCK_DUPLICATE"
-        if self.halted or self.realized_pnl_today <= -self.config.initial_capital_usd * self.config.max_daily_loss_pct / 100:
+        self.last_prices.update(prices)
+        if self.check_drawdown() or self.realized_pnl_today <= -self.config.initial_capital_usd * self.config.max_daily_loss_pct / 100:
             return "BLOCK_DAILY_LOSS"
         if symbol in self.positions or len(self.positions) >= self.config.max_open_positions:
             return "BLOCK_POSITIONS"
@@ -97,12 +115,15 @@ class Portfolio:
         pnl = p.quantity * (price - p.entry)
         self.realized_pnl_today += pnl
         self.events.append({"type": "SELL_SIMULATED", "symbol": symbol, "qty": p.quantity, "price": price, "pnl": pnl, "reason": reason})
-        if self.realized_pnl_today <= -self.config.initial_capital_usd * self.config.max_daily_loss_pct / 100:
-            self.halted = True
+        self.check_drawdown()
         return pnl
 
     def process_bar(self, bar: Bar):
         bar.validate()
+        if self.processed_bars.get(bar.symbol) == bar.timestamp.isoformat():
+            return
+        self.processed_bars[bar.symbol] = bar.timestamp.isoformat()
+        self.last_prices[bar.symbol] = bar.close
         p = self.positions.get(bar.symbol)
         if p:
             # Conservative assumption: stop wins if both touched in one candle.
@@ -110,6 +131,7 @@ class Portfolio:
                 self.exit(bar.symbol, min(bar.open, p.stop), "STOP")
             elif bar.high >= p.target:
                 self.exit(bar.symbol, p.target, "TARGET")
+        self.check_drawdown()
 
 def orb_signal(bars: list[Bar]):
     """15-minute opening range; signals only on completed bars, long-only."""
