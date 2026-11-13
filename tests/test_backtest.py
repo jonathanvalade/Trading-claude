@@ -29,6 +29,17 @@ class BacktestTests(unittest.TestCase):
         self.assertGreater(buys[0]["price"], 10.8)
         self.assertEqual(result["metrics"]["trade_count"], 1)
 
+    def test_daily_curve_has_one_mark_per_session(self):
+        result = run_backtest(sample())
+        self.assertEqual(len(result["equity_curve"]), 1)
+
+    def test_entry_fees_in_trade_pnl(self):
+        no_fee = run_backtest(sample(), costs=Costs(slippage_bps=0, commission_per_share=0))
+        with_fee = run_backtest(sample(), costs=Costs(slippage_bps=0, commission_per_share=0.1))
+        self.assertEqual(no_fee["metrics"]["trade_count"], 1)
+        self.assertEqual(with_fee["metrics"]["trade_count"], 1)
+        self.assertLess(with_fee["trades"][0], no_fee["trades"][0])
+
     def test_ai_rejection(self):
         result = compare(sample(), approvals={})
         self.assertEqual(result["ai_gated"]["metrics"]["trade_count"], 0)
