@@ -13,7 +13,9 @@ class Store:
     def save(self, portfolio):
         payload = {"cash": portfolio.cash, "positions": {k: vars(v) for k, v in portfolio.positions.items()},
                    "realized_pnl_today": portfolio.realized_pnl_today, "seen_signals": list(portfolio.seen_signals),
-                   "halted": portfolio.halted, "session_date": portfolio.session_date,\n                   "session_start_equity": portfolio.session_start_equity, "last_prices": portfolio.last_prices,\n                   "processed_bars": portfolio.processed_bars}
+                   "halted": portfolio.halted, "session_date": portfolio.session_date,
+                   "session_start_equity": portfolio.session_start_equity, "last_prices": portfolio.last_prices,
+                   "processed_bars": portfolio.processed_bars}
         with sqlite3.connect(self.path) as db:
             db.execute("INSERT INTO state(id,payload) VALUES(1,?) ON CONFLICT(id) DO UPDATE SET payload=excluded.payload",
                        (json.dumps(payload),))
